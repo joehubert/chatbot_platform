@@ -2,238 +2,387 @@
 
 ## Overview
 
-A reusable, enterprise-grade chatbot platform designed for corporate websites that leverages RAG (Retrieval-Augmented Generation) capabilities, intelligent routing, and comprehensive monitoring. The platform will be deployable across different organizations with minimal configuration changes.
+A reusable, enterprise-grade chatbot platform designed for corporate websites that leverages RAG (Retrieval-Augmented Generation) capabilities, intelligent routing, and comprehensive monitoring. Organizations will clone and deploy their own instances with customized configurations and branding.
 
 ## Core Architecture Requirements
 
-### Multi-Tenant Design
-- **Configurable per organization**: Support multiple organizations with isolated data and configurations
-- **White-label capability**: Customizable branding, styling, and messaging per organization
-- **Environment-based configuration**: All organization-specific settings managed via environment variables or configuration files
+### Single-Tenant Deployment Model
+- **Repository-based distribution**: Organizations clone the repository and deploy their own instances
+- **Infrastructure independence**: Each organization manages their own databases, Redis, and supporting services
+- **Configuration-driven customization**: All organization-specific settings managed via environment variables and configuration files
+- **White-label capability**: Customizable branding, styling, and messaging through configuration
 
-> **Question**: Do you need true multi-tenancy (single deployment serving multiple orgs) or separate deployments per organization? This affects database design and security considerations.
-
-### Frontend Integration
-- **JavaScript Widget**: Embeddable widget that can be integrated into any corporate website
+### Frontend Integration Options
+- **JavaScript Widget**: Primary embeddable widget for corporate websites
+- **Multiple Integration Methods**:
+  - CDN script tag for simple integration
+  - NPM package for modern build systems
+  - iframe embed for sandboxed deployment
 - **Responsive Design**: Mobile and desktop compatibility
-- **Customizable UI**: Configurable colors, positioning, and styling to match corporate branding
+- **Customizable UI**: Configurable colors, positioning, styling, and messaging through CSS variables and configuration
 - **Minimal Dependencies**: Lightweight implementation with minimal external dependencies
-
-> **Suggestion**: Consider providing multiple integration options (iframe embed, npm package, CDN script) for different technical requirements.
 
 ## Intelligence Layer
 
 ### RAG (Retrieval-Augmented Generation)
-- **Document Ingestion**: Support for multiple document formats (PDF, Word, HTML, plain text, structured data)
-- **Chunking Strategy**: Configurable document chunking with overlap settings
-- **Embedding Generation**: Generate and store embeddings for knowledge base content
-- **Similarity Search**: Retrieve relevant context based on user queries
-- **Source Attribution**: Track and display sources used in responses
 
-> **Question**: What document ingestion methods do you prefer? File upload interface, API endpoints, or automated crawling of websites/documentation?
+#### Document Ingestion
+- **File-based approach**: Monitor designated folders for knowledge base content
+- **Supported formats**: PDF, TXT, DOCX, HTML, Markdown files
+- **Folder structure**:
+  ```
+  knowledge_base/
+  ├── documents/          # General company documents
+  ├── products/          # Product-specific information
+  ├── policies/          # Company policies and procedures
+  └── faqs/             # Frequently asked questions
+  ```
+- **Auto-processing**: Automatic detection and processing of new/updated files
+- **Chunking strategy**: Configurable document chunking with overlap settings
+- **Metadata extraction**: Extract and store document metadata (title, creation date, category)
 
-### Intelligent Query Processing Pipeline
+#### Vector Database Operations
+- **Embedding generation**: Generate and store embeddings for all document chunks
+- **Similarity search**: Retrieve relevant context based on user queries
+- **Source attribution**: Track and display sources used in responses
+- **Index management**: Rebuild indexes when documents are updated
+
+### Intelligent Query Processing Pipeline (LangGraph)
 
 #### 1. Rate Limiting
-- **Implementation**: Redis-based token bucket algorithm
-- **Configurable Limits**: Per-user, per-IP, and global rate limits
-- **Graceful Degradation**: Appropriate error messages when limits exceeded
+- **Redis token bucket**: Implement token bucket algorithm using Redis
+- **Configurable limits**:
+  - Requests per minute per IP
+  - Requests per minute per session
+  - Burst capacity settings
+- **Graceful degradation**: Queue requests when near limits, reject with appropriate messages when exceeded
 
 #### 2. Relevance Filtering
-- **Intent Classification**: Determine if query is relevant to the organization's domain
-- **Confidence Scoring**: Threshold-based filtering for low-confidence queries
-- **Fallback Handling**: Graceful responses for out-of-scope questions
+- **Intent classification**: Determine if query relates to organization's domain
+- **Confidence thresholding**: Configurable minimum confidence score
+- **Out-of-scope handling**: Polite responses redirecting to appropriate channels
 
-#### 3. Cache Layer
-- **Semantic Similarity**: Find previously answered similar questions using vector similarity
-- **Cache Hit Optimization**: Return cached responses for near-identical queries
-- **Cache Invalidation**: Strategies for updating cached responses when knowledge base changes
+#### 3. Semantic Cache Layer
+- **Similar query detection**: Use vector similarity to find previously answered questions
+- **Configurable similarity threshold**: Environment variable for cache hit determination
+- **Cache response flagging**: Mark cached responses with metadata flag
+- **Cache invalidation**: Automatic invalidation when knowledge base updates
 
-> **Question**: What similarity threshold should trigger a cache hit? Should users be notified when receiving a cached response?
-
-#### 4. Routing Logic (LangGraph Integration)
-- **Model Selection**: Route queries to appropriate LLM based on:
-  - Query complexity assessment
-  - Question type classification (factual, conversational, technical)
+#### 4. Model Routing Logic
+- **Query analysis factors**:
+  - Complexity assessment (simple facts vs. multi-step reasoning)
+  - Question type classification (factual, conversational, technical support)
   - RAG requirement determination
-- **Progressive Enhancement**: Escalate to more powerful models if initial response is inadequate
-- **Cost Optimization**: Use cheaper models for simple queries, reserve expensive models for complex ones
+- **Model selection strategy**:
+  - Route simple queries to faster/cheaper models
+  - Use powerful models for complex reasoning
+  - Determine RAG necessity based on query content
+- **Progressive enhancement**: Escalate to more capable models if initial response inadequate
 
 #### 5. Authentication Node
-- **Conditional Activation**: Trigger authentication for account-specific queries
-- **Multi-Factor Options**: 
-  - SMS-based OTP to registered mobile number
-  - Email-based OTP to registered email address
-- **Session Management**: Maintain authenticated state during conversation
-- **Security**: Secure token generation and validation
-
-> **Question**: How long should authentication sessions last? Should there be different authentication levels for different types of information?
+- **Conditional activation**: Trigger only for account-specific or sensitive queries
+- **OTP delivery methods**:
+  - SMS to registered mobile number
+  - Email to registered email address
+- **Configurable session duration**: Environment variable for authentication timeout
+- **Secure token management**: Generate and validate time-limited tokens
 
 ## State and Conversation Management
 
 ### Session Handling
-- **Persistent Sessions**: Maintain conversation context across page reloads
-- **Context Window Management**: Efficiently manage conversation history within model limits
-- **Multi-Turn Conversations**: Support for follow-up questions and context retention
-- **Session Expiry**: Configurable session timeouts
+- **Persistent sessions**: Maintain conversation context using Redis or database storage
+- **Configurable context management**:
+  - Maximum conversation turns to retain
+  - Context window size limits
+  - Automatic summarization trigger point
+- **Conversation summarization**: Compress older conversation history when approaching context limits
+- **Session cleanup**: Automatic cleanup of expired sessions
 
-### State Storage
-- **Conversation History**: Store and retrieve previous interactions
-- **User Preferences**: Remember user settings and preferences
-- **Authentication State**: Manage user authentication status
+### Context Preservation
+- **Multi-turn conversations**: Support follow-up questions with full context
+- **Entity tracking**: Remember mentioned entities throughout conversation
+- **User preferences**: Store temporary preferences during session
 
-> **Suggestion**: Consider implementing conversation summarization for long conversations to maintain context while staying within token limits.
+## Model Integration and Abstraction
 
-## Model and Database Integration
+### LLM Factory Pattern
+- **Pluggable architecture**: Abstract interface for different model providers
+- **Supported providers**:
+  - OpenAI (GPT-3.5, GPT-4 variants)
+  - Anthropic (Claude models)
+  - Local models via Ollama
+  - Azure OpenAI Service
+  - AWS Bedrock
+- **Configuration-driven selection**:
+  ```yaml
+  models:
+    simple_queries:
+      provider: "openai"
+      model: "gpt-3.5-turbo"
+      endpoint: "https://api.openai.com/v1"
+    complex_queries:
+      provider: "anthropic"
+      model: "claude-3-sonnet-20240229"
+    local_model:
+      provider: "ollama"
+      model: "llama2:7b"
+      endpoint: "http://localhost:11434"
+  ```
+- **Fallback chains**: Automatic failover between models
+- **Model-specific prompt optimization**: Tailored prompts for different architectures
 
-### LLM Configuration
-- **Pluggable Models**: Support for multiple LLM providers (OpenAI, Anthropic, local models)
-- **Environment Configuration**: Model selection and API keys managed via .env files
-- **Fallback Chains**: Automatic fallback to alternative models if primary fails
-- **Model-Specific Prompting**: Optimized prompts for different model architectures
-
-> **Question**: Do you need support for local/self-hosted models (Ollama, vLLM) in addition to API-based services?
-
-### Vector Database
-- **Pluggable Backend**: Support for multiple vector databases (Pinecone, Weaviate, Chroma, PostgreSQL with pgvector)
-- **Scalability**: Handle large knowledge bases efficiently
-- **Backup and Recovery**: Data persistence and recovery strategies
-
-### Relational Database
-- **Metrics Storage**: Store detailed analytics and conversation logs
-- **User Management**: Handle user sessions and authentication data
-- **Configuration Storage**: Store organization-specific settings
-- **Audit Trail**: Complete audit log for compliance requirements
+### Vector Database Abstraction
+- **Pluggable backends**: Support multiple vector databases through adapter pattern
+- **Supported databases**:
+  - Chroma (default for development)
+  - Pinecone (cloud option)
+  - Weaviate (self-hosted option)
+  - PostgreSQL with pgvector extension
+- **Environment-based configuration**: Database selection via environment variables
 
 ## Monitoring and Analytics
 
-### Metrics Collection
-- **Query Analytics**:
+### Core Metrics Collection
+- **Query metrics**:
   - Prompt summary and categorization
-  - Response summary and quality metrics
-  - Resolution attempt count
-  - Query complexity scoring
-  - Response time and latency
-- **User Behavior**:
-  - Conversation flow analysis
-  - Drop-off points identification
-  - User satisfaction indicators
-- **System Performance**:
-  - Model usage and costs
-  - Cache hit rates
-  - Error rates and types
+  - Response summary and satisfaction indicators
+  - Number of resolution attempts
+  - Query complexity scoring (1-5 scale)
+  - Cache hit/miss status
+  - Response latency
+- **Model usage tracking**:
+  - Tokens consumed per model
+  - Cost per query calculation
+  - Model selection reasoning
+- **Resolution effectiveness**:
+  - User satisfaction indicators (explicit feedback)
+  - Conversation completion rates
+  - Escalation to human support frequency
 
 ### LangSmith Integration
-- **Detailed Tracing**: Complete request/response tracing through the entire pipeline
-- **Debug Capabilities**: Step-by-step execution visibility
-- **Performance Optimization**: Identify bottlenecks and optimization opportunities
-- **A/B Testing**: Compare different prompt strategies and models
+- **Cost tracking**: Detailed token usage and cost analysis per query
+- **Resolution rate monitoring**: Track successful query resolution percentages
+- **Trace visibility**: Complete request flow through LangGraph pipeline
+- **Performance optimization**: Identify bottlenecks in processing chain
 
-> **Question**: What specific metrics are most important for your use case? Customer satisfaction, cost per query, resolution rate?
+### Database Schema
+```sql
+conversations (
+  id, session_id, user_query, bot_response, 
+  model_used, tokens_used, cost_estimate,
+  cache_hit, resolution_attempts, complexity_score,
+  created_at, response_time_ms
+)
+
+metrics_summary (
+  date, total_queries, cache_hit_rate,
+  avg_response_time, total_cost, resolution_rate
+)
+```
 
 ## Deployment and Infrastructure
 
-### Containerization Strategy
-- **Microservices Architecture**: Separate containers for:
-  - Main application server
-  - Redis cache
-  - Relational database (PostgreSQL)
-  - Vector database
-  - Background job processors
-- **Docker Compose**: Development environment setup
-- **Kubernetes Ready**: Production deployment configurations
-- **Health Checks**: Container health monitoring and automatic restart capabilities
+### Container Architecture
+- **Multi-container deployment**:
+  - `chatbot-api`: Main application server
+  - `redis`: Cache and rate limiting
+  - `postgres`: Relational database for metrics and sessions
+  - `vector-db`: Vector database (Chroma/Weaviate)
+  - `ollama`: Local model server (optional)
+
+### Docker Compose Configuration
+```yaml
+version: '3.8'
+services:
+  chatbot-api:
+    build: .
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/chatbot
+      - REDIS_URL=redis://redis:6379
+      - VECTOR_DB_URL=http://chroma:8000
+    volumes:
+      - ./knowledge_base:/app/knowledge_base
+    depends_on:
+      - postgres
+      - redis
+      - chroma
+```
+
+### Kubernetes Deployment
+- **Horizontal Pod Autoscaler**: Scale based on CPU/memory usage and request rate
+- **ConfigMaps**: Non-sensitive configuration management
+- **Secrets**: API keys, database credentials, encryption keys
+- **Persistent Volumes**: Knowledge base documents and database storage
+- **Service mesh ready**: Compatible with Istio/Linkerd for advanced traffic management
 
 ### Configuration Management
-- **Environment Variables**: All sensitive data and configuration via environment variables
-- **Configuration Validation**: Startup validation of required configurations
-- **Hot Reload**: Support for configuration updates without full restart where possible
+- **Environment variables**: Runtime configuration
+- **ConfigMaps/Secrets**: Kubernetes-native configuration
+- **Validation**: Startup validation of required configurations
+- **Hot reload**: Support for configuration updates without restart where possible
 
-> **Suggestion**: Consider using Docker secrets or Kubernetes secrets for sensitive data instead of environment variables in production.
-
-## Security Requirements
+## Security Implementation
 
 ### Data Protection
-- **Encryption**: Encrypt sensitive data at rest and in transit
-- **PII Handling**: Secure handling of personally identifiable information
-- **Data Retention**: Configurable data retention policies
-- **GDPR Compliance**: Support for data deletion requests
+- **Encryption at rest**: Database encryption for sensitive data
+- **TLS/HTTPS**: All communication encrypted in transit
+- **Input sanitization**: Validate and sanitize all user inputs
+- **PII detection**: Basic detection and handling of personally identifiable information
 
 ### Access Control
-- **API Authentication**: Secure API endpoints with proper authentication
-- **Rate Limiting**: Prevent abuse and DoS attacks
-- **Input Validation**: Sanitize and validate all user inputs
-- **CORS Configuration**: Proper cross-origin resource sharing setup
+- **API authentication**: JWT-based API security
+- **Rate limiting**: Multi-layer abuse prevention
+- **CORS configuration**: Proper cross-origin setup for widget integration
+- **Secret management**: Use Kubernetes secrets or Docker secrets for sensitive data
 
-## Performance Requirements
+## Performance and Scalability
 
-### Scalability
-- **Horizontal Scaling**: Support for multiple application instances
-- **Database Scaling**: Efficient database queries and indexing
-- **Caching Strategy**: Multi-layer caching for optimal performance
-- **Load Balancing**: Distribution of requests across instances
+### Scalability Design
+- **Stateless application**: Enable horizontal scaling
+- **Database optimization**: Proper indexing and query optimization
+- **Connection pooling**: Efficient database connection management
+- **Async processing**: Background jobs for non-critical tasks
 
-### Response Times
-- **Target Latency**: Sub-2 second response times for cached queries
-- **Streaming Responses**: Progressive response delivery for better user experience
-- **Async Processing**: Background processing for non-critical tasks
+### Performance Targets
+- **Response times**:
+  - Cached responses: < 500ms
+  - Simple queries: < 2 seconds
+  - Complex RAG queries: < 5 seconds
+- **Concurrent handling**: Scale horizontally via Kubernetes HPA
+- **Streaming responses**: Progressive response delivery for better UX
 
-> **Question**: What are your specific performance targets? How many concurrent users should the system support?
+### Caching Strategy
+- **Multi-layer caching**:
+  - Redis for session data and rate limiting
+  - Vector similarity cache for repeated queries
+  - HTTP response caching for static assets
+- **Cache invalidation**: Smart invalidation when knowledge base updates
 
-## Integration Requirements
-
-### APIs
-- **RESTful APIs**: Standard HTTP APIs for integration
-- **Webhook Support**: Event notifications for external systems
-- **Admin APIs**: Management interfaces for configuration and monitoring
-- **Health Check Endpoints**: System status and readiness checks
-
-### Third-Party Services
-- **SMS Provider**: Integration with SMS services for OTP delivery
-- **Email Service**: SMTP or API-based email delivery
-- **Analytics Platforms**: Integration with existing business intelligence tools
-
-## Development and Maintenance
+## Development and Testing
 
 ### Code Organization
-- **Modular Architecture**: Clear separation of concerns
-- **Plugin System**: Easy addition of new features and integrations
-- **Configuration Schema**: Well-documented configuration options
-- **API Documentation**: Comprehensive API documentation
+- **Modular architecture**: Clean separation of concerns
+- **Plugin system**: Easy addition of new model providers and vector databases
+- **Factory patterns**: Abstracted model and database implementations
+- **Configuration schema**: Well-documented configuration options
 
-### Testing Strategy
-- **Unit Tests**: Core business logic testing
-- **Integration Tests**: End-to-end workflow testing
-- **Load Testing**: Performance and scalability validation
-- **Security Testing**: Vulnerability assessment
+### Testing Framework (Jest + Pytest)
+- **Unit tests**: Core business logic and utility functions
+- **Integration tests**: Full pipeline testing with test databases
+- **Load testing**: Artillery.js for performance validation
+- **E2E testing**: Playwright for frontend widget testing
 
-> **Question**: What's your preferred testing framework and CI/CD pipeline requirements?
+### CI/CD Pipeline (GitHub Actions)
+```yaml
+name: CI/CD Pipeline
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run tests
+        run: |
+          docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit
+  
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to staging
+        run: kubectl apply -f k8s/staging/
+```
 
-## Additional Considerations
+## API Design
 
-### Compliance and Governance
-- **Audit Logging**: Complete audit trail for all system actions
-- **Data Governance**: Clear data handling and retention policies
-- **Regulatory Compliance**: Support for industry-specific regulations
-- **Content Moderation**: Filters for inappropriate content
+### RESTful Endpoints
+```
+POST /api/chat/message          # Send chat message
+GET  /api/chat/session/{id}     # Get conversation history
+POST /api/auth/request-otp      # Request authentication OTP
+POST /api/auth/verify-otp       # Verify OTP code
+GET  /api/health                # Health check
+GET  /api/metrics               # Basic metrics endpoint
+POST /api/admin/reload-kb       # Reload knowledge base
+```
 
-### Operational Requirements
-- **Monitoring**: Comprehensive system monitoring and alerting
-- **Backup Strategy**: Regular backups of all critical data
-- **Disaster Recovery**: Recovery procedures for system failures
-- **Documentation**: Complete operational documentation
+### WebSocket Support
+- **Real-time messaging**: WebSocket connection for streaming responses
+- **Connection management**: Proper cleanup and reconnection handling
+- **Authentication**: Secure WebSocket authentication
 
-> **Question**: Are there specific compliance requirements (SOC 2, HIPAA, etc.) that need to be addressed?
+## Configuration Reference
 
-## Open Questions for Clarification
+### Environment Variables
+```bash
+# Model Configuration
+PRIMARY_MODEL_PROVIDER=openai
+PRIMARY_MODEL_NAME=gpt-3.5-turbo
+FALLBACK_MODEL_PROVIDER=ollama
+FALLBACK_MODEL_NAME=llama2:7b
 
-1. **Multi-tenancy Approach**: Single deployment vs. per-organization deployments?
-2. **Authentication Integration**: Should the system integrate with existing corporate SSO/LDAP systems?
-3. **Knowledge Base Management**: Do you need a UI for content management, or will it be API-driven?
-4. **Customization Depth**: How much UI/UX customization should be possible without code changes?
-5. **Language Support**: Is multi-language support required?
-6. **Mobile App Integration**: Should the platform support mobile app embedding beyond web widgets?
-7. **Reporting Dashboard**: Do you need a built-in analytics dashboard, or will data be exported to existing BI tools?
-8. **Content Approval Workflow**: Should there be an approval process for knowledge base updates?
-9. **Integration Requirements**: What existing systems (CRM, helpdesk, etc.) need integration?
-10. **Deployment Environment**: On-premises, cloud, or hybrid deployment preferences?
+# Vector Database
+VECTOR_DB_TYPE=chroma
+VECTOR_DB_URL=http://localhost:8000
+
+# Cache Settings
+SIMILARITY_THRESHOLD=0.85
+CACHE_TTL_HOURS=24
+MAX_CONTEXT_TURNS=10
+SUMMARIZATION_TRIGGER=8
+
+# Authentication
+AUTH_SESSION_DURATION_MINUTES=30
+OTP_EXPIRY_MINUTES=5
+
+# Rate Limiting
+RATE_LIMIT_PER_MINUTE=60
+BURST_CAPACITY=10
+
+# LangSmith
+LANGSMITH_API_KEY=ls-xxx
+LANGSMITH_PROJECT=corporate-chatbot
+```
+
+### Knowledge Base Structure
+```
+knowledge_base/
+├── documents/
+│   ├── company-handbook.pdf
+│   └── employee-guidelines.txt
+├── products/
+│   ├── product-a-specs.md
+│   └── product-b-manual.pdf
+├── policies/
+│   ├── privacy-policy.txt
+│   └── terms-of-service.md
+└── faqs/
+    ├── general-faq.txt
+    └── technical-support-faq.md
+```
+
+## Implementation Priority
+
+### Phase 1: Core Functionality
+1. Basic chat interface and widget
+2. Simple model integration (OpenAI)
+3. Document ingestion and RAG
+4. Redis-based rate limiting
+5. Basic metrics collection
+
+### Phase 2: Intelligence Layer
+1. LangGraph pipeline implementation
+2. Semantic caching
+3. Model routing logic
+4. Authentication system
+5. Conversation management
+
+### Phase 3: Production Readiness
+1. Multiple model provider support
+2. Kubernetes deployment configurations
+3. Comprehensive monitoring
+4. Security hardening
+5. Performance optimization
+
+This requirements document provides a comprehensive foundation for implementing a production-ready corporate chatbot platform with the flexibility and scalability needed for enterprise deployment.
